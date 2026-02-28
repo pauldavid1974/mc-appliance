@@ -1,0 +1,103 @@
+###############################################################################
+# Zero-Touch Minecraft Appliance - Docker Compose
+# https://github.com/pauldavid1974/mc-appliance
+#
+# This file brings up two services:
+#   1. minecraft  - PaperMC server via itzg/minecraft-server
+#   2. world-mgr  - Web-based World Manager (Node.js) on port 3000
+#
+# Usage:  docker compose up -d
+# Logs:   docker compose logs -f
+# Stop:   docker compose down
+###############################################################################
+
+services:
+  # ── Minecraft PaperMC Server ──────────────────────────────────────────────
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: mc-server
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    ports:
+      - "25565:25565"     # Minecraft game port
+    environment:
+      # ── Core Settings ───────────────────────────────────────────────────
+      EULA: "TRUE"
+      TYPE: "PAPER"
+      VERSION: "LATEST"
+      MEMORY: "2G"
+
+      # ── Server Identity ─────────────────────────────────────────────────
+      SERVER_NAME: "MC Appliance"
+      MOTD: "§aZero-Touch Minecraft Appliance §7| §bPowered by Docker"
+      MAX_PLAYERS: 20
+
+      # ── Gameplay ────────────────────────────────────────────────────────
+      DIFFICULTY: "normal"
+      MODE: "survival"
+      PVP: "true"
+      ALLOW_NETHER: "true"
+      SPAWN_PROTECTION: 0
+      VIEW_DISTANCE: 10
+      ONLINE_MODE: "true"
+
+      # ── RCON (used by World Manager) ────────────────────────────────────
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: "HappyWorlds!42"
+      RCON_PORT: 25575
+
+      # ── Performance ─────────────────────────────────────────────────────
+      USE_AIKAR_FLAGS: "true"
+      MAX_TICK_TIME: -1
+
+    volumes:
+      - mc-data:/data
+    healthcheck:
+      test: mc-health
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ── World Manager Web UI ──────────────────────────────────────────────────
+  world-manager:
+    build: ./world-manager
+    container_name: mc-world-manager
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      MC_RCON_HOST: "minecraft"
+      MC_RCON_PORT: 25575
+      MC_RCON_PASSWORD: "appliance-rcon-changeme"
+      MC_DATA_PATH: "/mc-data"
+      RCLONE_CONFIG_PATH: "/config/rclone/rclone.conf"
+      NODE_ENV: "production"
+    volumes:
+      - mc-data:/mc-data
+      - rclone-config:/config/rclone
+      - backups:/backups
+    depends_on:
+      minecraft:
+        condition: service_healthy
+
+volumes:
+  mc-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/mcadmin/minecraft-data
+  rclone-config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/mcadmin/.config/rclone
+  backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/mcadmin/backups

@@ -1,0 +1,13 @@
+{
+  "name": "mc-world-manager",
+  "version": "1.0.0",
+  "description": "Web-based World Manager for the Zero-Touch Minecraft Appliance",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "rcon-client": "^4.2.4"
+  }
+}

@@ -1,0 +1,86 @@
+#cloud-config
+###############################################################################
+# Zero-Touch Minecraft Appliance - Cloud-Init User Data
+#
+# INSTRUCTIONS:
+#   1. Download the Ubuntu Server 24.04 LTS ISO
+#   2. Flash it to a USB drive (using Rufus, balenaEtcher, etc.)
+#   3. Copy this file to the root of the USB as "user-data"
+#      (some tools create a "cidata" partition - place it there)
+#   4. Plug USB + Ethernet into your target PC
+#   5. Boot from USB and walk away
+#
+###############################################################################
+
+autoinstall:
+  version: 1
+
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  network:
+    version: 2
+    ethernets:
+      id0:
+        match:
+          name: "en*"
+        dhcp4: true
+        dhcp6: true
+
+  storage:
+    layout:
+      name: direct
+
+  identity:
+    hostname: mc-appliance
+    username: mcadmin
+    # Password: "minecraft" — CHANGE THIS before real use!
+    # Generate your own: python3 -c "import crypt; print(crypt.crypt('yourpassword'))"
+    password: "$6$rounds=4096$randomsalt$KJ8HzL5VtGx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx5Qx"
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  packages:
+    - curl
+    - wget
+    - git
+    - jq
+    - unzip
+    - htop
+    - net-tools
+
+  late-commands:
+    - |
+      cat <<'FIRSTBOOT' > /target/etc/rc.local
+      #!/bin/bash
+      LOG="/var/log/mc-appliance-install.log"
+      if [ ! -f /var/lib/mc-appliance-installed ]; then
+        echo "$(date): Starting MC Appliance installation..." >> "$LOG"
+        for i in $(seq 1 30); do
+          if ping -c 1 github.com &>/dev/null; then break; fi
+          sleep 2
+        done
+        curl -fsSL https://raw.githubusercontent.com/pauldavid1974/mc-appliance/main/install.sh | bash >> "$LOG" 2>&1
+        touch /var/lib/mc-appliance-installed
+        echo "$(date): Installation complete." >> "$LOG"
+      fi
+      exit 0
+      FIRSTBOOT
+    - chmod +x /target/etc/rc.local
+    - |
+      cat <<'RCLOCAL' > /target/etc/systemd/system/rc-local.service
+      [Unit]
+      Description=MC Appliance First Boot
+      After=network-online.target
+      Wants=network-online.target
+      [Service]
+      Type=oneshot
+      ExecStart=/etc/rc.local
+      RemainAfterExit=yes
+      [Install]
+      WantedBy=multi-user.target
+      RCLOCAL
+    - curtin in-target -- systemctl enable rc-local.service
